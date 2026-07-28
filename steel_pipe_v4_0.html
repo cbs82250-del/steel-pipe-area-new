@@ -1,0 +1,610 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0f172a">
+<title>鋼管 面積計算 v4.0</title>
+<style>
+:root{
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Yu Gothic",Meiryo,sans-serif;
+  color:#0f172a;background:#f1f5f9;
+  --panel:#fff;--line:#cbd5e1;--muted:#64748b;--accent:#2563eb;
+  --good:#047857;--goodbg:#ecfdf5;--bad:#b91c1c;--badbg:#fef2f2
+}
+*{box-sizing:border-box}
+body{margin:0;background:#f1f5f9}
+.app{max-width:760px;margin:auto;padding:14px 12px 40px}
+h1{margin:6px 0 4px;font-size:27px}
+.version{font-weight:800;color:#1d4ed8;margin-bottom:12px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:15px;margin-bottom:12px;box-shadow:0 6px 20px #0f172a0d}
+h2{font-size:18px;margin:0 0 12px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:11px}
+@media(max-width:580px){.grid{grid-template-columns:1fr}}
+label{display:block;font-size:13px;font-weight:700;margin-bottom:5px}
+input,select,button{width:100%;min-height:49px;border-radius:11px;font:inherit}
+input,select{padding:10px 12px;border:1px solid var(--line);background:#fff;font-size:17px}
+input:focus,select:focus{outline:3px solid #2563eb2e;border-color:var(--accent)}
+button{border:0;padding:11px 14px;font-size:17px;font-weight:800;cursor:pointer}
+.primary{background:var(--accent);color:#fff}
+.secondary{background:#fff;border:1px solid var(--line);color:#0f172a}
+.actions{display:grid;grid-template-columns:2fr 1fr;gap:10px}
+.hidden{display:none!important}
+.note{font-size:12px;color:var(--muted);line-height:1.6;margin-top:8px}
+.warn{color:var(--bad);font-weight:800}
+.branch-card,.flange-card{border:1px dashed #94a3b8;background:#f8fafc;border-radius:13px;padding:12px;margin-top:12px}
+.branch-title,.flange-title{font-weight:900;margin:0 0 10px}
+.result-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.result-cell{background:#eef2f7;border-radius:12px;padding:12px}
+.result-cell span{display:block;font-size:12px;color:#475569}
+.result-cell b{display:block;font-size:22px;margin-top:4px}
+.total{margin-top:10px;border:2px solid #6ee7b7;background:var(--goodbg);border-radius:13px;padding:15px;text-align:center}
+.total span{display:block;color:var(--good);font-weight:800}
+.total b{display:block;font-size:38px;margin-top:4px}
+.error{border:1px solid #fecaca;background:var(--badbg);color:var(--bad);border-radius:12px;padding:12px;font-weight:800;margin-top:12px}
+.small-check{display:flex;gap:8px;align-items:center;margin-top:10px;font-weight:700;font-size:14px}
+.small-check input{width:auto;min-height:auto}
+footer{text-align:center;color:var(--muted);font-size:12px;margin-top:18px}
+</style>
+</head>
+<body>
+<main class="app">
+  <h1>鋼管 内外面積計算</h1>
+  <div class="version">v4.0｜1000A・レジューサー補正版</div>
+
+  <form id="form" novalidate>
+    <section class="card">
+      <label for="shape">管種</label>
+      <select id="shape">
+        <option value="straight">直管</option>
+        <option value="elbow">エルボー</option>
+        <option value="reducer">レジューサー</option>
+        <option value="branch">枝付き直管</option>
+      </select>
+    </section>
+
+    <section id="straightBox" class="card">
+      <h2>直管</h2>
+      <div class="grid">
+        <div><label for="sNom">管径</label><select id="sNom"></select></div>
+        <div><label for="sOd">外径 D（mm）</label><input id="sOd" type="number" readonly></div>
+        <div><label for="sLen">長さ L（mm）</label><input id="sLen" type="number" min="0" step="1" value="1000"></div>
+      </div>
+    </section>
+
+    <section id="elbowBox" class="card hidden">
+      <h2>エルボー</h2>
+      <div class="grid">
+        <div><label for="eNom">管径</label><select id="eNom"></select></div>
+        <div><label for="eOd">外径 D（mm）</label><input id="eOd" type="number" readonly></div>
+        <div><label for="eAngle">角度</label><select id="eAngle"><option value="90">90度</option><option value="45">45度</option></select></div>
+        <div><label for="eX">X方向の直管長さ（mm）</label><input id="eX" type="number" min="0" step="1" value="300"></div>
+        <div><label for="eY">Y方向の直管長さ（mm）</label><input id="eY" type="number" min="0" step="1" value="300"></div>
+        <div><label for="eR">中心線半径 R（mm）</label><input id="eR" type="number" min="0" step="0.1"></div>
+      </div>
+      <div class="note">曲がり部分の中心線長は「2πR×角度÷360」で計算します。Rは変更できます。</div>
+    </section>
+
+    <section id="reducerBox" class="card hidden">
+      <h2>レジューサー</h2>
+      <div class="grid">
+        <div><label for="rBigNom">大径側 管径</label><select id="rBigNom"></select></div>
+        <div><label for="rBigOd">大径側外径 D1（mm）</label><input id="rBigOd" type="number" readonly></div>
+        <div><label for="rSmallNom">小径側 管径</label><select id="rSmallNom"></select></div>
+        <div><label for="rSmallOd">小径側外径 D2（mm）</label><input id="rSmallOd" type="number" readonly></div>
+        <div><label for="rLen">レジューサー本体長さ L（mm）</label><input id="rLen" type="number" min="0" step="1" value="300"></div>
+      </div>
+      <div class="note">500A以上を含め、円すい台の側面積として計算します。古いU・V定数は使用しません。</div>
+    </section>
+
+    <section id="branchBox" class="card hidden">
+      <h2>枝付き直管</h2>
+      <div class="grid">
+        <div><label for="bMainNom">主管 管径</label><select id="bMainNom"></select></div>
+        <div><label for="bMainOd">主管外径（mm）</label><input id="bMainOd" type="number" readonly></div>
+        <div><label for="bMainLen">主管長さ（mm）</label><input id="bMainLen" type="number" min="0" step="1" value="1000"></div>
+        <div><label for="branchCount">枝の本数</label><input id="branchCount" type="number" min="0" max="20" step="1" value="1"></div>
+      </div>
+      <label class="small-check"><input id="subtractOpenings" type="checkbox" checked>主管の開口面積を差し引く</label>
+      <div id="branchInputs"></div>
+    </section>
+
+    <section id="mainFlangeBox" class="card">
+      <h2 id="mainFlangeHeading">主管フランジ</h2>
+      <div class="grid">
+        <div>
+          <label for="mainFlangeType">種類</label>
+          <select id="mainFlangeType">
+            <option value="NONE">なし</option>
+            <option value="10K">10キロ</option>
+            <option value="20K">20キロ</option>
+            <option value="F12">上水F12</option>
+            <option value="OTHER">その他</option>
+          </select>
+        </div>
+        <div><label for="mainFlangeCount">枚数</label><input id="mainFlangeCount" type="number" min="0" step="1" value="0"></div>
+        <div id="mainManualWrap" class="hidden"><label for="mainManualArea">その他 面積／枚（㎡）</label><input id="mainManualArea" type="number" min="0" step="0.001" value="0"></div>
+      </div>
+      <div id="mainFlangeStatus" class="note"></div>
+    </section>
+
+    <section id="smallFlangeBox" class="card hidden">
+      <h2>レジューサー小径側フランジ</h2>
+      <div class="grid">
+        <div>
+          <label for="smallFlangeType">種類</label>
+          <select id="smallFlangeType">
+            <option value="NONE">なし</option>
+            <option value="10K">10キロ</option>
+            <option value="20K">20キロ</option>
+            <option value="F12">上水F12</option>
+            <option value="OTHER">その他</option>
+          </select>
+        </div>
+        <div><label for="smallFlangeCount">枚数</label><input id="smallFlangeCount" type="number" min="0" step="1" value="0"></div>
+        <div id="smallManualWrap" class="hidden"><label for="smallManualArea">その他 面積／枚（㎡）</label><input id="smallManualArea" type="number" min="0" step="0.001" value="0"></div>
+      </div>
+      <div id="smallFlangeStatus" class="note"></div>
+    </section>
+
+    <section class="card">
+      <div class="actions">
+        <button class="primary" type="submit">計算する</button>
+        <button class="secondary" id="resetBtn" type="button">リセット</button>
+      </div>
+      <div id="errorBox" class="error hidden"></div>
+    </section>
+
+    <section id="resultBox" class="card hidden">
+      <h2>計算結果</h2>
+      <div class="result-grid">
+        <div class="result-cell"><span>管・継手 外面</span><b id="outOuter">0.000 ㎡</b></div>
+        <div class="result-cell"><span>管・継手 内面</span><b id="outInner">0.000 ㎡</b></div>
+        <div class="result-cell"><span>フランジ</span><b id="outFlange">0.000 ㎡</b></div>
+        <div class="result-cell"><span>開口差引</span><b id="outOpening">0.000 ㎡</b></div>
+      </div>
+      <div class="total"><span>内外面積 合計</span><b id="outTotal">0.000 ㎡</b></div>
+    </section>
+
+    <section class="card note">
+      肉厚は考慮せず、管の内面と外面は同じ外径で計算します。フランジは両面、外周、内周、ボルト穴内壁を加算し、ボルト穴の平面部分を差し引きます。20キロやF12で寸法表にない口径は「その他」で1枚当たり面積を入力してください。
+    </section>
+  </form>
+
+  <footer>GitHub Pages対応・サーバー不要　v4.0</footer>
+</main>
+
+<script>
+"use strict";
+
+const PI = Math.PI;
+const NOMINAL_OD = {
+  "20A":27.2,"25A":34.0,"32A":42.7,"40A":48.6,"50A":60.5,"65A":76.3,
+  "80A":89.1,"90A":101.6,"100A":114.3,"125A":139.8,"150A":165.2,
+  "200A":216.3,"250A":267.4,"300A":318.5,"350A":355.6,"400A":406.4,
+  "450A":457.2,"500A":508.0,"550A":558.8,"600A":609.6,"650A":660.4,
+  "700A":711.2,"750A":762.0,"800A":812.8,"850A":863.6,"900A":914.4,
+  "950A":965.2,"1000A":1016.0
+};
+
+const FLANGE_BORE = {
+  "20A":27.7,"25A":34.5,"32A":43.2,"40A":49.1,"50A":61.1,"65A":77.1,
+  "80A":90.0,"90A":102.6,"100A":115.4,"125A":141.2,"150A":166.6,
+  "200A":218.0,"250A":269.5,"300A":321.0,"350A":358.1,"400A":409.0,
+  "450A":460.0,"500A":511.0,"550A":562.0,"600A":613.0,"650A":664.0,
+  "700A":715.0,"750A":766.0,"800A":817.0,"850A":868.0,"900A":919.0,
+  "950A":970.0,"1000A":1021.0
+};
+
+const FLANGE_DATA = {
+  "10K":{
+    "20A":{od:100,t:14,bn:4,bd:15,pcd:75},"25A":{od:125,t:14,bn:4,bd:19,pcd:90},
+    "32A":{od:135,t:16,bn:4,bd:19,pcd:100},"40A":{od:140,t:16,bn:4,bd:19,pcd:105},
+    "50A":{od:155,t:16,bn:4,bd:19,pcd:120},"65A":{od:175,t:18,bn:4,bd:19,pcd:140},
+    "80A":{od:185,t:18,bn:8,bd:19,pcd:150},"90A":{od:195,t:18,bn:8,bd:19,pcd:160},
+    "100A":{od:210,t:18,bn:8,bd:19,pcd:175},"125A":{od:250,t:20,bn:8,bd:23,pcd:210},
+    "150A":{od:280,t:22,bn:8,bd:23,pcd:240},"200A":{od:330,t:22,bn:12,bd:23,pcd:290},
+    "250A":{od:400,t:24,bn:12,bd:25,pcd:355},"300A":{od:445,t:24,bn:16,bd:25,pcd:400},
+    "350A":{od:490,t:26,bn:16,bd:25,pcd:445},"400A":{od:560,t:28,bn:16,bd:27,pcd:510},
+    "450A":{od:620,t:30,bn:20,bd:27,pcd:565},"500A":{od:675,t:30,bn:20,bd:27,pcd:620},
+    "550A":{od:745,t:32,bn:20,bd:33,pcd:680},"600A":{od:795,t:32,bn:24,bd:33,pcd:730},
+    "650A":{od:845,t:34,bn:24,bd:33,pcd:780},"700A":{od:905,t:34,bn:24,bd:33,pcd:840},
+    "750A":{od:970,t:36,bn:24,bd:33,pcd:900},"800A":{od:1020,t:36,bn:28,bd:33,pcd:950},
+    "850A":{od:1070,t:36,bn:28,bd:33,pcd:1000},"900A":{od:1120,t:38,bn:28,bd:33,pcd:1050},
+    "1000A":{od:1235,t:40,bn:28,bd:39,pcd:1160}
+  },
+  "20K":{
+    "20A":{od:100,t:16,bn:4,bd:15,pcd:75},"25A":{od:125,t:16,bn:4,bd:19,pcd:90},
+    "32A":{od:135,t:18,bn:4,bd:19,pcd:100},"40A":{od:140,t:18,bn:4,bd:19,pcd:105},
+    "50A":{od:155,t:18,bn:8,bd:19,pcd:120},"65A":{od:175,t:20,bn:8,bd:19,pcd:140},
+    "80A":{od:200,t:22,bn:8,bd:23,pcd:160},"90A":{od:210,t:24,bn:8,bd:23,pcd:170},
+    "100A":{od:225,t:24,bn:8,bd:23,pcd:185},"125A":{od:270,t:26,bn:8,bd:25,pcd:225},
+    "150A":{od:305,t:28,bn:12,bd:25,pcd:260},"200A":{od:350,t:30,bn:12,bd:25,pcd:305},
+    "250A":{od:430,t:34,bn:12,bd:27,pcd:380},"300A":{od:480,t:36,bn:16,bd:27,pcd:430},
+    "350A":{od:540,t:40,bn:16,bd:33,pcd:480},"400A":{od:605,t:46,bn:16,bd:33,pcd:540},
+    "450A":{od:675,t:48,bn:20,bd:33,pcd:605},"500A":{od:730,t:50,bn:20,bd:33,pcd:660},
+    "550A":{od:795,t:52,bn:20,bd:39,pcd:720},"600A":{od:845,t:54,bn:24,bd:39,pcd:770},
+    "650A":{od:945,t:60,bn:24,bd:48,pcd:850},"700A":{od:995,t:64,bn:24,bd:48,pcd:900},
+    "750A":{od:1080,t:68,bn:24,bd:56,pcd:970},"800A":{od:1140,t:72,bn:24,bd:56,pcd:1030},
+    "850A":{od:1200,t:74,bn:24,bd:56,pcd:1090},"900A":{od:1250,t:76,bn:28,bd:56,pcd:1140}
+  },
+  "F12":{
+    "80A":{od:211,t:18,bn:8,bd:19,pcd:168},"100A":{od:238,t:18,bn:8,bd:19,pcd:195},
+    "125A":{od:263,t:20,bn:8,bd:19,pcd:220},"150A":{od:290,t:22,bn:8,bd:19,pcd:247},
+    "200A":{od:342,t:22,bn:12,bd:19,pcd:299},"250A":{od:410,t:24,bn:12,bd:23,pcd:360},
+    "300A":{od:464,t:24,bn:16,bd:23,pcd:414},"350A":{od:530,t:26,bn:16,bd:25,pcd:472},
+    "400A":{od:582,t:26,bn:16,bd:25,pcd:524},"450A":{od:652,t:28,bn:20,bd:27,pcd:585},
+    "500A":{od:706,t:28,bn:20,bd:27,pcd:639},"600A":{od:810,t:30,bn:24,bd:27,pcd:743},
+    "700A":{od:928,t:32,bn:24,bd:33,pcd:854},"800A":{od:1034,t:34,bn:28,bd:33,pcd:960},
+    "900A":{od:1156,t:36,bn:28,bd:33,pcd:1073},"1000A":{od:1262,t:38,bn:28,bd:33,pcd:1179}
+  }
+};
+
+const $ = id => document.getElementById(id);
+const nominalList = Object.keys(NOMINAL_OD);
+
+function fillNominal(id, selected){
+  const el = $(id);
+  el.innerHTML = "";
+  nominalList.forEach(n => {
+    const opt = document.createElement("option");
+    opt.value = n;
+    opt.textContent = n;
+    if(n === selected) opt.selected = true;
+    el.appendChild(opt);
+  });
+}
+
+function nominalNumber(nom){
+  return Number(String(nom).replace("A",""));
+}
+
+function setOd(selectId, inputId){
+  $(inputId).value = NOMINAL_OD[$(selectId).value];
+}
+
+function num(id, label, integer=false){
+  const v = Number($(id).value);
+  if(!Number.isFinite(v) || v < 0 || (integer && !Number.isInteger(v))){
+    throw new Error(label + "を正しく入力してください。");
+  }
+  return v;
+}
+
+function pipeOneSurface(od, length){
+  return PI * od * length / 1_000_000;
+}
+
+function reducerOneSurface(d1, d2, length){
+  const slant = Math.sqrt(length * length + Math.pow((d1 - d2) / 2, 2));
+  return PI * ((d1 + d2) / 2) * slant / 1_000_000;
+}
+
+function flangePieceArea(nom, type, manualArea){
+  if(type === "NONE") return 0;
+  if(type === "OTHER"){
+    if(!Number.isFinite(manualArea) || manualArea < 0) throw new Error("その他のフランジ面積を正しく入力してください。");
+    return manualArea;
+  }
+  const d = FLANGE_DATA[type]?.[nom];
+  if(!d){
+    const names = { "10K":"10キロ", "20K":"20キロ", "F12":"上水F12" };
+    throw new Error(`${names[type]}・${nom}の自動寸法がありません。「その他」を選んでください。`);
+  }
+  const bore = FLANGE_BORE[nom] ?? NOMINAL_OD[nom];
+  const faces = 2 * PI * (Math.pow(d.od/2,2) - Math.pow(bore/2,2));
+  const holeFaces = 2 * d.bn * PI * Math.pow(d.bd/2,2);
+  const outerEdge = PI * d.od * d.t;
+  const innerEdge = PI * bore * d.t;
+  const holeWalls = d.bn * PI * d.bd * d.t;
+  return (Math.max(faces - holeFaces, 0) + outerEdge + innerEdge + holeWalls) / 1_000_000;
+}
+
+function activeMainNom(){
+  const shape = $("shape").value;
+  if(shape === "straight") return $("sNom").value;
+  if(shape === "elbow") return $("eNom").value;
+  if(shape === "reducer") return $("rBigNom").value;
+  return $("bMainNom").value;
+}
+
+function flangeStatus(prefix, nom){
+  const type = $(prefix + "FlangeType").value;
+  const manualWrap = $(prefix + "ManualWrap");
+  const status = $(prefix + "FlangeStatus");
+  manualWrap.classList.toggle("hidden", type !== "OTHER");
+
+  if(type === "NONE"){
+    status.textContent = "フランジなし";
+    status.classList.remove("warn");
+    return;
+  }
+  if(type === "OTHER"){
+    status.textContent = `${nom}：1枚当たり面積を手入力します。`;
+    status.classList.remove("warn");
+    return;
+  }
+  const d = FLANGE_DATA[type]?.[nom];
+  if(!d){
+    const names = { "10K":"10キロ", "20K":"20キロ", "F12":"上水F12" };
+    status.textContent = `${names[type]}・${nom}の自動寸法はありません。「その他」を使用してください。`;
+    status.classList.add("warn");
+    return;
+  }
+  const area = flangePieceArea(nom, type, 0);
+  status.textContent = `${nom}：外径 ${d.od}mm、穴 ${d.bn}個、面積 ${area.toFixed(3)}㎡／枚`;
+  status.classList.remove("warn");
+}
+
+let branchState = [];
+
+function syncBranchState(){
+  const cards = [...document.querySelectorAll("[data-branch-card]")];
+  branchState = cards.map(card => ({
+    nom: card.querySelector("[data-nom]").value,
+    length: card.querySelector("[data-length]").value,
+    flangeType: card.querySelector("[data-flange-type]").value,
+    flangeCount: card.querySelector("[data-flange-count]").value,
+    manualArea: card.querySelector("[data-manual-area]").value
+  }));
+}
+
+function renderBranches(){
+  syncBranchState();
+  const count = Number($("branchCount").value);
+  if(!Number.isInteger(count) || count < 0 || count > 20){
+    showError("枝の本数は0～20の整数で入力してください。");
+    return;
+  }
+  const root = $("branchInputs");
+  root.innerHTML = "";
+  for(let i=0; i<count; i++){
+    const state = branchState[i] ?? {nom:"100A",length:"300",flangeType:"NONE",flangeCount:"0",manualArea:"0"};
+    const card = document.createElement("div");
+    card.className = "branch-card";
+    card.dataset.branchCard = "1";
+    card.innerHTML = `
+      <div class="branch-title">枝 ${i+1}</div>
+      <div class="grid">
+        <div><label>枝 管径</label><select data-nom></select></div>
+        <div><label>枝外径（mm）</label><input data-od type="number" readonly></div>
+        <div><label>枝長さ（mm）</label><input data-length type="number" min="0" step="1" value="${state.length}"></div>
+        <div><label>枝フランジ種類</label>
+          <select data-flange-type>
+            <option value="NONE">なし</option><option value="10K">10キロ</option>
+            <option value="20K">20キロ</option><option value="F12">上水F12</option>
+            <option value="OTHER">その他</option>
+          </select>
+        </div>
+        <div><label>枝フランジ枚数</label><input data-flange-count type="number" min="0" step="1" value="${state.flangeCount}"></div>
+        <div data-manual-wrap class="hidden"><label>その他 面積／枚（㎡）</label><input data-manual-area type="number" min="0" step="0.001" value="${state.manualArea}"></div>
+      </div>
+      <div data-status class="note"></div>`;
+    root.appendChild(card);
+
+    const nomEl = card.querySelector("[data-nom]");
+    nominalList.forEach(n=>{
+      const opt=document.createElement("option");
+      opt.value=n;opt.textContent=n;
+      if(n===state.nom)opt.selected=true;
+      nomEl.appendChild(opt);
+    });
+    const typeEl = card.querySelector("[data-flange-type]");
+    typeEl.value = state.flangeType;
+    const update = () => updateBranchCard(card);
+    nomEl.addEventListener("change", update);
+    typeEl.addEventListener("change", update);
+    update();
+  }
+}
+
+function updateBranchCard(card){
+  const nom = card.querySelector("[data-nom]").value;
+  card.querySelector("[data-od]").value = NOMINAL_OD[nom];
+  const type = card.querySelector("[data-flange-type]").value;
+  card.querySelector("[data-manual-wrap]").classList.toggle("hidden", type !== "OTHER");
+  const status = card.querySelector("[data-status]");
+  if(type === "NONE"){
+    status.textContent = "枝フランジなし";
+    status.classList.remove("warn");
+  }else if(type === "OTHER"){
+    status.textContent = `${nom}：1枚当たり面積を手入力します。`;
+    status.classList.remove("warn");
+  }else{
+    const d = FLANGE_DATA[type]?.[nom];
+    if(!d){
+      status.textContent = `${nom}の自動寸法がありません。「その他」を選んでください。`;
+      status.classList.add("warn");
+    }else{
+      status.textContent = `${nom}：${flangePieceArea(nom,type,0).toFixed(3)}㎡／枚`;
+      status.classList.remove("warn");
+    }
+  }
+}
+
+function switchShape(){
+  const shape = $("shape").value;
+  $("straightBox").classList.toggle("hidden", shape !== "straight");
+  $("elbowBox").classList.toggle("hidden", shape !== "elbow");
+  $("reducerBox").classList.toggle("hidden", shape !== "reducer");
+  $("branchBox").classList.toggle("hidden", shape !== "branch");
+  $("smallFlangeBox").classList.toggle("hidden", shape !== "reducer");
+  $("mainFlangeHeading").textContent = shape === "reducer" ? "レジューサー大径側フランジ" :
+    shape === "branch" ? "主管フランジ" : "フランジ";
+  updateFlangeStatuses();
+  hideMessages();
+}
+
+function updateFlangeStatuses(){
+  flangeStatus("main", activeMainNom());
+  if($("shape").value === "reducer"){
+    flangeStatus("small", $("rSmallNom").value);
+  }
+}
+
+function calculate(){
+  const shape = $("shape").value;
+  let outer = 0;
+  let inner = 0;
+  let openingDeduction = 0;
+  let flange = 0;
+
+  if(shape === "straight"){
+    const od = NOMINAL_OD[$("sNom").value];
+    const length = num("sLen","直管長さ");
+    outer = pipeOneSurface(od,length);
+    inner = outer;
+  }
+
+  if(shape === "elbow"){
+    const od = NOMINAL_OD[$("eNom").value];
+    const angle = num("eAngle","角度");
+    const x = num("eX","X方向長さ");
+    const y = num("eY","Y方向長さ");
+    const radius = num("eR","中心線半径");
+    const arc = 2 * PI * radius * (angle / 360);
+    outer = pipeOneSurface(od, x + y + arc);
+    inner = outer;
+  }
+
+  if(shape === "reducer"){
+    const d1 = NOMINAL_OD[$("rBigNom").value];
+    const d2 = NOMINAL_OD[$("rSmallNom").value];
+    const length = num("rLen","レジューサー長さ");
+    if(d1 <= d2) throw new Error("大径側は小径側より大きい口径を選んでください。");
+    outer = reducerOneSurface(d1,d2,length);
+    inner = outer;
+  }
+
+  if(shape === "branch"){
+    const mainOd = NOMINAL_OD[$("bMainNom").value];
+    const mainLen = num("bMainLen","主管長さ");
+    outer = pipeOneSurface(mainOd,mainLen);
+    inner = outer;
+
+    const cards = [...document.querySelectorAll("[data-branch-card]")];
+    const expected = num("branchCount","枝の本数",true);
+    if(cards.length !== expected) throw new Error("枝入力欄を確認してください。");
+
+    cards.forEach((card,index)=>{
+      const nom = card.querySelector("[data-nom]").value;
+      const od = NOMINAL_OD[nom];
+      const length = Number(card.querySelector("[data-length]").value);
+      if(!Number.isFinite(length) || length < 0) throw new Error(`枝${index+1}の長さを確認してください。`);
+      const area = pipeOneSurface(od,length);
+      outer += area;
+      inner += area;
+
+      if($("subtractOpenings").checked){
+        const hole = PI * Math.pow(od/2,2) / 1_000_000;
+        openingDeduction += hole * 2;
+      }
+
+      const type = card.querySelector("[data-flange-type]").value;
+      const count = Number(card.querySelector("[data-flange-count]").value);
+      const manual = Number(card.querySelector("[data-manual-area]").value);
+      if(!Number.isFinite(count) || count < 0 || !Number.isInteger(count)){
+        throw new Error(`枝${index+1}のフランジ枚数を確認してください。`);
+      }
+      flange += flangePieceArea(nom,type,manual) * count;
+    });
+
+    outer = Math.max(outer - openingDeduction/2,0);
+    inner = Math.max(inner - openingDeduction/2,0);
+  }
+
+  const mainNom = activeMainNom();
+  const mainType = $("mainFlangeType").value;
+  const mainCount = num("mainFlangeCount","主管フランジ枚数",true);
+  const mainManual = num("mainManualArea","主管その他フランジ面積");
+  flange += flangePieceArea(mainNom,mainType,mainManual) * mainCount;
+
+  if(shape === "reducer"){
+    const smallNom = $("rSmallNom").value;
+    const smallType = $("smallFlangeType").value;
+    const smallCount = num("smallFlangeCount","小径側フランジ枚数",true);
+    const smallManual = num("smallManualArea","小径側その他フランジ面積");
+    flange += flangePieceArea(smallNom,smallType,smallManual) * smallCount;
+  }
+
+  const total = outer + inner + flange;
+  $("outOuter").textContent = outer.toFixed(3) + " ㎡";
+  $("outInner").textContent = inner.toFixed(3) + " ㎡";
+  $("outFlange").textContent = flange.toFixed(3) + " ㎡";
+  $("outOpening").textContent = openingDeduction.toFixed(3) + " ㎡";
+  $("outTotal").textContent = total.toFixed(3) + " ㎡";
+  $("resultBox").classList.remove("hidden");
+  $("errorBox").classList.add("hidden");
+  $("resultBox").scrollIntoView({behavior:"smooth",block:"start"});
+}
+
+function showError(message){
+  $("errorBox").textContent = message;
+  $("errorBox").classList.remove("hidden");
+  $("resultBox").classList.add("hidden");
+}
+
+function hideMessages(){
+  $("errorBox").classList.add("hidden");
+  $("resultBox").classList.add("hidden");
+}
+
+function setElbowRadius(){
+  $("eR").value = (nominalNumber($("eNom").value) * 1.5).toFixed(1);
+}
+
+function resetAll(){
+  $("form").reset();
+  $("shape").value = "straight";
+  $("sNom").value = "100A";
+  $("eNom").value = "100A";
+  $("rBigNom").value = "500A";
+  $("rSmallNom").value = "400A";
+  $("bMainNom").value = "200A";
+  setOd("sNom","sOd");
+  setOd("eNom","eOd");
+  setOd("rBigNom","rBigOd");
+  setOd("rSmallNom","rSmallOd");
+  setOd("bMainNom","bMainOd");
+  setElbowRadius();
+  branchState = [];
+  $("branchCount").value = "1";
+  renderBranches();
+  switchShape();
+  window.scrollTo({top:0,behavior:"smooth"});
+}
+
+fillNominal("sNom","100A");
+fillNominal("eNom","100A");
+fillNominal("rBigNom","500A");
+fillNominal("rSmallNom","400A");
+fillNominal("bMainNom","200A");
+setOd("sNom","sOd");
+setOd("eNom","eOd");
+setOd("rBigNom","rBigOd");
+setOd("rSmallNom","rSmallOd");
+setOd("bMainNom","bMainOd");
+setElbowRadius();
+renderBranches();
+switchShape();
+
+$("shape").addEventListener("change",switchShape);
+$("sNom").addEventListener("change",()=>{setOd("sNom","sOd");updateFlangeStatuses();});
+$("eNom").addEventListener("change",()=>{setOd("eNom","eOd");setElbowRadius();updateFlangeStatuses();});
+$("rBigNom").addEventListener("change",()=>{setOd("rBigNom","rBigOd");updateFlangeStatuses();});
+$("rSmallNom").addEventListener("change",()=>{setOd("rSmallNom","rSmallOd");updateFlangeStatuses();});
+$("bMainNom").addEventListener("change",()=>{setOd("bMainNom","bMainOd");updateFlangeStatuses();});
+$("branchCount").addEventListener("change",renderBranches);
+$("mainFlangeType").addEventListener("change",updateFlangeStatuses);
+$("smallFlangeType").addEventListener("change",updateFlangeStatuses);
+$("form").addEventListener("submit",event=>{
+  event.preventDefault();
+  try{ calculate(); }catch(error){ showError(error instanceof Error ? error.message : "計算できませんでした。"); }
+});
+$("resetBtn").addEventListener("click",resetAll);
+</script>
+</body>
+</html>
